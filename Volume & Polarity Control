@@ -1,0 +1,57 @@
+desc:Volume & Polarity Control
+//tags: utility gain stereo polarity phase
+//author: Based on Cockos Volume & IXix Polarity
+
+slider37:0<-70,10,1>Volume (dB)
+slider38:0<0,3,1{Normal,Invert Left,Invert Right,Invert Both}>Polarity Mode
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_tail_size = -2;
+AMP_DB_i = 1 / 8.68588963806504;
+db = slider37;
+
+@slider
+modL = slider38& 1 ? -1 : 1;
+modR = slider38 & 2 ? -1 : 1;
+
+@block
+cnt = 0;
+ddb = 0.0;
+
+db_chg_splpos = slider_next_chg(1, tgtdb);
+db_chg_splpos > 0 ? (
+  db = slider37;
+) : (
+  tgtdb = slider37;
+  db_chg_splpos = samplesblock;
+);
+
+ddb = (tgtdb - db) / db_chg_splpos;
+
+@sample
+
+cnt == db_chg_splpos ? (
+  ddb = 0.0;
+  db_chg_splpos = slider_next_chg(1, tgtdb);
+  db_chg_splpos > cnt ? (
+    ddb = (tgtdb - db) / (db_chg_splpos - cnt);
+  );
+);
+
+adj = exp(db * AMP_DB_i);
+
+// Apply volume
+spl0 *= adj;
+spl1 *= adj;
+
+// Apply polarity
+spl0 *= modL;
+spl1 *= modR;
+
+db += ddb;
+cnt += 1;
