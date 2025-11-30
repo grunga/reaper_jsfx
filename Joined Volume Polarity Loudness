@@ -1,0 +1,76 @@
+// Import the Volume & Polarity Control plugin code
+var volumePolarityControl = {
+slider1:0<-70,10,1>Volume (dB)
+slider2:0<0,3,1{Normal,Invert Left,Invert Right,Invert Both}>Polarity Mode
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_tail_size = -2;
+AMP_DB_i = 1 / 8.68588963806504;
+db = slider1;
+
+@slider
+modL = slider2 & 1 ? -1 : 1;
+modR = slider2 & 2 ? -1 : 1;
+
+@block
+cnt = 0;
+ddb = 0.0;
+
+db_chg_splpos = slider_next_chg(1, tgtdb);
+db_chg_splpos > 0 ? (
+  db = slider1;
+) : (
+  tgtdb = slider1;
+  db_chg_splpos = samplesblock;
+);
+
+ddb = (tgtdb - db) / db_chg_splpos;
+
+@sample
+
+cnt == db_chg_splpos ? (
+  ddb = 0.0;
+  db_chg_splpos = slider_next_chg(1, tgtdb);
+  db_chg_splpos > cnt ? (
+    ddb = (tgtdb - db) / (db_chg_splpos - cnt);
+  );
+);
+
+adj = exp(db * AMP_DB_i);
+
+// Apply volume
+spl0 *= adj;
+spl1 *= adj;
+
+// Apply polarity
+spl0 *= modL;
+spl1 *= modR;
+
+db += ddb;
+cnt += 1;
+};
+
+// Import the Loudness Meter plugin code
+var loudnessMeter = new LoudnessMeter();
+
+// Combine the functionality of the two plugins
+var combinedPlugin = {
+  process: function(input) {
+    // Process the input with the Volume & Polarity Control plugin
+    var processed1 = volumePolarityControl.process(input);
+
+    // Process the input with the Loudness Meter plugin
+    var processed2 = loudnessMeter.process(processed1);
+
+    return processed2;
+  }
+};
+
+// Use the combined plugin
+var input = new Input();
+var output = combinedPlugin.process(input);
